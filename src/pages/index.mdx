@@ -1,0 +1,377 @@
+import { SparkleIcon } from '@/components/SparkleIcon'
+import { CodeBlock } from '@/components/Code'
+import { generateRssFeed } from '@/lib/generateRssFeed'
+
+export async function getStaticProps() {
+  if (process.env.NODE_ENV === 'production') {
+    await generateRssFeed()
+  }
+  return { props: {} }
+}
+
+
+---
+
+![](@/images/commit-suggestions.png)
+
+## This guide describes the process to start a validator node on the Exzo Network {{ date: '2023-04-06T00:00Z' }}
+
+Nodes require some technical knowledge about networks and Unix Linux systems. Before starting, make sure you can accomplish necessary tasks such as:
+
+Installation and configuration of Unix / Linux systems
+Network configuration (open ports, firewall configuration, NAT configuration, etc.)
+Willingness to keep the system functional and updated
+
+
+### <SparkleIcon /> Hardware and Operating System (OS) Requirements
+
+- You can run the software on any Linux platform by making your own settings and installing the necessary libraries and dependencies.
+- In our tests, the software ran for weeks without problems on Ubuntu 20.04 and RHEL 8.
+- Although it is possible to run the node on OSX or Windows, it is not recommended.
+
+
+### <SparkleIcon /> CPU
+
+- 12 cores / 24 threads, or more
+- 2.8GHz, or faster
+- AVX2 instruction support (to use official release binaries, self-compile otherwise)
+- Support for AVX512f and/or SHA-NI instructions is helpful
+- The AMD Zen3 series is popular with the validator community
+
+### <SparkleIcon /> RAM
+
+- 128GB, or more
+- Motherboard with 256GB capacity suggested
+
+### <SparkleIcon /> GPU
+
+- PCIe Gen3 x4 NVME SSD, or better
+- Accounts: 500GB, or larger. High TBW (Total Bytes Written)
+- Ledger: 1TB or larger. High TBW suggested
+- OS: (Optional) 500GB, or larger. SATA OK
+- The OS may be installed on the ledger disk, though testing has shown better performance with the ledger on its own disk
+- Accounts and ledger can be stored on the same disk, however due to high IOPS, this is not recommended
+- The Samsung 970 and 980 Pro series SSDs are popular with the validator community
+
+---
+
+![](@/images/configuration-files.png)
+
+## Step 1. Install the Exzo Network Tool Suite {{ date: '2023-03-17T00:00Z' }}
+
+Check the latest release available visiting our [GitHub](https://github.com/ExzoNetwork/exzo-program-library) page, at the time of writing this guide is 0.3.4 as you will see in the following image
+
+Download Exzo install tool
+
+    ```
+[exzo@node]$ wget https://github.com/exzo/exzo-chain/releases/download/v0.3.4/exzo-install-init-x86_64-unknown-linux-gnu
+    ```
+
+Then assign execution permissions
+
+    ```
+[exzo@node$] chmod +x exzo-install-init-x86_64-unknown-linux-gnu
+    ```
+Install the last release, replacing LATEST_RELEASE for release number
+
+./exzo-install-init-x86_64-unknown-linux-gnu LATEST_RELEASE
+
+    ```
+[exzo@node]$ ./exzo-install-init-x86_64-unknown-linux-gnu 0.3.4
+    ```
+
+You will get an output similar to this
+
+    ```
+Configuration: /home/exzonode/.config/exzo/install/config.yml
+Active release directory: /home/exzonode/.local/share/exzo/install/active_release
+* Release version: 0.3.4
+* Release URL: https://github.com/exzo/exzo-chain/releases/download/v0.3.4/exzo-release-x86_64-unknown-linux-gnu.tar.bz2
+ Update successful
+Adding export PATH="/home/exzonode/.local/share/exzo/install/active_release/bin:$PATH" to /home/exzonode/.bash_profile
+Close and reopen your terminal to apply the PATH changes or run the following in your existing shell:
+export PATH="/home/exzonode/.local/share/exzo/install/active_release/bin:$PATH"
+    ```
+Execute export PATH command as the terminal suggest you
+
+    ```
+[exzo@node]$ export PATH="/home/exzonode/.local/share/exzonode/install/active_release/bin:$PATH"
+    ```
+Important, use the export command that your terminal shows since it is different for each user
+
+Use the “exzo” command to see a complete list of all available actions, which indicates that you have successfully installed the software.
+
+Visit our wiki [here](https://docs.exzo.network/command_line#exzo_network_cli) to obtain more information related to using the Exzo Network CLI.
+
+
+
+## Step 2. Configure the Exzo CLI {{ date: 'Step 2' }}
+
+![](@/images/dark-mode2.png)
+
+## Dark mode support {{ date: '2023-03-06T00:00Z' }}
+
+Connect CLI with Exzo mainnet or testnet using exzo config set command
+
+Exzo Network Testnet CLI configuration:
+    ```
+[exzo@node]$ exzo config set --url https://rpc-test-1.exzo.network/rpc
+Config File: /home/user/.config/exzo/cli/config.yml
+RPC URL: https://rpc-test-1.exzo.network/rpc
+WebSocket URL: wss://rpc-test-1.exzo.network/rpc (computed)
+Keypair Path: /home/user/.config/exzo/id.json 
+Commitment: confirmed 
+    ```
+
+Confirm the cluster Is reachable and checks your software/cluster version
+
+    ```
+[exzo@node ~]$ exzo transaction-count
+17729450
+[exzo@node ~]$ exzo --version
+exzo-cli 0.3.4
+[exzo@node ~]$ exzo cluster-version
+0.3.4
+    ```
+
+You can update your version if it differs from that of the cluster using the next command
+
+- exzo-install-init VERSION_NUMBER
+
+
+Join the gossip network and try to view all the other nodes in the cluster
+
+    ```
+[exzo@node~]$ exzo-gossip spy --entrypoint bootnode-test.exzo.network:8001
+    ```
+
+You should see in the terminal the list of active nodes in the network as well as your computer in "Spy" mode
+
+![](@/images/dark-mode2.png)
+
+
+
+## Step 3. System Tuning {{ date: 'Step 3' }}
+
+Increase UDP buffers
+
+    ```
+[exzo@node ~]$ sudo bash -c "cat >/etc/sysctl.d/20-exzo-udp-buffers.conf <<EOF
+> # Increase UDP buffer size
+> net.core.rmem_default = 134217728
+> net.core.rmem_max = 134217728
+> net.core.wmem_default = 134217728
+> net.core.wmem_max = 134217728
+> EOF"
+    ```
+
+    ```
+[exzo@node ~]$ sudo sysctl -p /etc/sysctl.d/20-exzo-udp-buffers.conf
+[sudo] password for exzonode: 
+net.core.rmem_default = 134217728
+net.core.rmem_max = 134217728
+net.core.wmem_default = 134217728
+net.core.wmem_max = 134217728
+    ```
+Increase memory-mapped files limit
+
+    ```
+[exzo@node ~]$ sudo bash -c "cat >/etc/sysctl.d/20-exzo-mmaps.conf <<EOF
+ # Increase memory mapped files limit
+ vm.max_map_count = 500000
+ EOF"
+    ```
+
+    ```
+[exzo@node ~]$ sudo systemctl daemon-reload
+    ```
+
+    ```
+[exzo@node ~]$ sudo bash -c cat >/etc/security/limits.d/90-exzo-nofiles.conf EOF
+ > # Increase process file descriptor count limit
+ > * - nofile 500000
+ > EOF
+    ```
+## Step 4. Create Your Identity & Vote Account {{ date: 'Step 4' }}
+
+Before proceeding we need to understand what these two accounts functions are.
+
+### Vote Account:
+
+A vote account can be created with the create-vote-account command. The vote account can be configured when first created or after the validator is running. All aspects of the vote account can be changed except for the vote account address, which is fixed for the lifetime of the account. This account collects rewards from the commission that the node has set.
+
+Visit [vote account management](https://docs.exzo.network/validating#acc_management) docs for more information.
+
+
+### Validator Identity: 
+
+The validator identity is a system account that is used to pay for all the vote transaction fees submitted to the vote account. Because the validator is expected to vote on most valid blocks it receives, the validator identity account is frequently (potentially multiple times per second) signing transactions and paying fees. For this reason, the validator identity keypair must be stored as a "hot wallet" in a keypair file on the same system the validator process is running. Because a hot wallet is generally less secure than an offline or "cold" wallet, the validator operator may choose to store only enough XZO on the identity account to cover voting fees for a limited amount of time, such as a few weeks or months. The validator identity account could be periodically topped off from a more secure wallet.
+
+This practice can reduce the risk of loss of funds if the validator node's disk or file system becomes compromised or corrupted.
+
+The validator identity is required to be provided when a voting account is created. The validator identity can also be changed after an account is created by using the vote-update-validator command.
+
+
+Note: You will have to save both seeds, for your identity and vote account, in the case you lose your seeds you will lose control over the account, please be careful.
+
+
+## Generate identity
+
+### Option 1. System Keypair - Create an identity keypair for your validator by running
+
+    ```
+[exzo@node ~]$ exzo-keygen new -o ~/validator-keypair.json
+Generating a new keypair
+For added security, enter a BIP39 passphrase
+NOTE! This passphrase improves security of the recovery seed phrase NOT the
+keypair file itself, which is stored as insecure plain text
+BIP39 Passphrase (empty for none): 
+Wrote new keypair to /home/exzonode/validator-keypair.json
+=========================================================================
+pubkey: FncgcZc6QAo6utJyZvp5Cp9eNxXvG9T7yCFKdH6VdXin
+=========================================================================
+Save this seed phrase to recover your new keypair:
+coach omit master vapor certain case powder stock swarm voice viable evil
+=========================================================================
+    ```
+
+The identity public key can now be viewed by running
+
+    ```
+[exzo@node ~]$ exzo-keygen pubkey ~/validator-keypair.json
+FncgcZc6QAo6utJyZvp5Cp9eNxXvG9T7yCFKdH6VdXin
+    ```
+
+By default, the validator-keypair.json is stored in the “ /home/user ” directory. You can change “~/”
+
+to use the directory you prefer. 
+
+Now that you have a keypair, set the exzo configuration to use your validator keypair for all following commands
+
+    ```
+[exzo@node~]$ exzo config set --keypair ~/validator-keypair.json
+onfig File: /home/exzonode/.config/exzo/cli/config.yml
+RPC URL: https://rpc-test-1.exzo.network/rpc
+WebSocket URL: wss://rpc-test-1.exzo.network/rpc (computed)
+Keypair Path: /home/user/.config/exzo/id.json 
+Commitment: confirmed 
+    ```
+
+### Option 2. Paper Wallet Identity You can create a paper wallet for your identity file instead of writing the keypair file to disk with
+
+    ```
+[exzo@node ~]$ exzo-keygen new --no-outfile
+    ```
+
+The corresponding identity public key can now be viewed by running
+
+    ```
+[exzo@node ~]$ exzo-keygen pubkey ASK
+    ```
+
+## Create Vote Account
+Create a vote-account keypair and create the vote account on the network.
+
+    ```
+[exzo@node ~]$ exzo-keygen new -o ~/vote-account-keypair.json
+Generating a new keypair
+For added security, enter a BIP39 passphrase
+NOTE! This passphrase improves security of the recovery seed phrase NOT the
+keypair file itself, which is stored as insecure plain text
+BIP39 Passphrase (empty for none): 
+Wrote new keypair to /home/exzospanish/vote-account-keypair.json
+=============================================================================
+pubkey: FM8V7mFGtC7msjXZhn8gzfgXVGSVJyWrYno4tW5rNjCY
+=============================================================================
+Save this seed phrase to recover your new keypair:
+loan illegal clip style electric use elevator repeat auto mule educate cotton
+=============================================================================
+    ```
+
+### Now that we have created our identity and vote account, it is time to link them to be able to identify ourselves in the network and synchronize our node.
+
+### <SparkleIcon /> To do this, we will need some XZO Native funds in the identity account, these will serve two functions:
+
+- Relate the identity account and the vote account in the next step (Create Vote account in the network)
+- Pay the commissions of the transactions in which the node participates
+
+You should have your public address noted, in any case, you can see it again
+
+    ```
+[exzo@node ~]$ exzo-keygen pubkey ~/validator-keypair.json
+FncgcZc6QAo6utJyZvp5Cp9eNxXvG9T7yCFKdH6VdXin
+[exzo@node ~]$ 
+    ```
+
+You can see how much balance the account has with the following command
+
+    ```
+[exzo@node ~]$ 
+exzo balance FncgcZc6QAo6utJyZvp5Cp9eNxXvG9T7yCFKdH6VdXin
+0
+[exzo@node ~]$
+    ```
+
+Send some XZO Native from our Exzo Wallet
+
+If you check the balance, you will now see your XZO balance in the identity account
+
+    ```
+[exzo@node ~]$ 
+exzo balance FncgcZc6QAo6utJyZvp5Cp9eNxXvG9T7yCFKdH6VdXin
+1.5 XZO
+[exzo@node ~]$ 
+    ```
+
+Now that we have some XZO in the identity account, it's time to create the vote account on the blockchain
+
+    ```
+[exzo@node ~]$ exzo create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
+Signature: 4Mo33Y6SNkBUjtCpdfdmCeBK5T7eMkAyRKQ7QZz12EDZx8qs6j2Tj9G26vBUBpjTbz95zUdhMEU3dV8TRsh6evNz
+    ```
+
+### Note: If you are using an identity stored in a paper wallet instead of a Keypair system file on your computer, replace ~/validator-keypair.json  for  ASK  which will suggest you enter your seed corresponding to the identity account.
+
+Keypair files are stored on your computer and therefore can be exposed in case your security is compromised, only send a sufficient amount of XZO Native to pay commissions for a period of time, 1-3 months, an amount of 100-300 XZO should be sufficient for a considerable period of time.”
+
+## Step 5. Connect Your Validator {{ date: 'Step 5' }}
+
+The command that allows executing the node is “exzo-validator” if you write it in the console you will be able to see all the possible arguments and options when executing your node.
+
+If your computer does not have a GPU or is not compatible with CUDA, you should not add --cuda in the command line.
+By default, the ledger will grow until there is no more space left on the hard drive, adding the arg --limit-ledger-size we will limit the file to a maximum of 500 GB.
+You can control the range of ports that the node will use to connect, by default it is recommended to open port range 8000-10000.
+Make sure your system clock is synchronized.
+
+### The system without a compatible GPU or CUDA
+
+    ```
+[exzo@node ~]$ screen exzo-validator --identity ~/validator-keypair.json --vote-account ~/vote-account-keypair.json --ledger /home/exzonode/ledger/ --rpc-port 8899 --dynamic-port-range 8000-8010 --entrypoint bootstrap-testnet.exzo.network:8001 --limit-ledger-size --expected-shred-version 17211 --max-genesis-archive-unpacked-size 707374182 --log -
+    ```
+
+### A system with a compatible GPU or CUDA available
+
+    ```
+[exzo@node ~]$ screen exzo-validator --cuda --identity ~/validator-keypair.json --vote-account ~/vote-account-keypair.json --ledger /home/exzonode/ledger/ --rpc-port 8899 --dynamic-port-range 8000-8010 --entrypoint bootstrap-testnet.exzo.network:8001 --limit-ledger-size --expected-shred-version 17211 --max-genesis-archive-unpacked-size 707374182 --log -
+    ```
+
+### Custom or optional settings
+
+- “--identity ASK” and/or “--vote-account ASK” If you are using paper wallets instead of keypairs on the system, you need to change the path to the corresponding file by the “ASK” argument.
+
+- “--limit-ledger-size size”  You can limit the size of the ledger to a maximum of 100 GB by replacing size for 50,000,000, you can assign another value as long as it is higher.
+
+## Step 6. Delegate stake {{ date: 'Step 6' }}
+
+By default, your node will not have any delegated balance. So that the node can act as a leader and receive a reward for validation it is necessary that it always have 10,000 or more delegated XZO, either from the node owner, from other delegates, or the sum of both. The easiest way to delegate your coins is from the Exzo wallet.
+
+
+## Step 7. Check your node {{ date: 'Step 7' }}
+
+You will be able to see your node in the list of active nodes and identify it by your vote account and/or identity, the list of ports it is using, and its public IP, in a new window run “exzo-gossip spy”
+
+    ```
+[exzo@node ~]$ exzo-gossip spy --entrypoint bootstrap-testnet.exzo.network:8001
+    ```
+
+You will also see the process open on your server if you run “htop” command
